@@ -1,0 +1,332 @@
+---
+title: "NFHS-5"
+subtitle: "Exploration of District-Level Data"
+output:
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_float:
+      collapsed: false
+    code_download: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message=FALSE, warning=FALSE, error = FALSE)
+```
+
+For this analysis, we use data downloaded from https://github.com/pratapvardhan/NFHS-5, which in turn was compiled from the NFHS-5 state and district fact sheets.
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+
+clean_indicators <- function(data) {
+  data %>% 
+   mutate(
+    indicator_code = as.numeric(str_extract(Indicator, '[0-9]{1,3}')),
+    Indicator = str_remove(Indicator, '[0-9]{1,3}.\ '),
+    Indicator = str_remove(Indicator, '[0-9]{0,3}\ \\(%\\)'),
+    Indicator = fct_reorder(Indicator, indicator_code),
+    State = case_when(
+      `State-Code` == "AN" ~ "A & N Islands",
+      `State-Code` == "DD" ~ "D & NH and Daman & Diu",
+      TRUE ~ State
+    )
+  )
+} 
+
+data_districts <- read_csv('data/NFHS-5-Districts.csv') %>% 
+  clean_indicators()
+
+data_states <- read_csv('data/NFHS-5-States.csv') %>% 
+  clean_indicators() %>% 
+  rename('NFHS-5' = 'NFHS-5 Total')
+
+```
+
+
+# Malnutrition among Children
+
+---
+
+In this section, we look at the stunting, wasting, underweight and overweight indicators among children under the age of 5 years. Here are the indicators used:
+
+* **Stunting**: Children under 5 years with a **height-for-age** ratio 2 standard deviations lower than the WHO standard average.
+* **Wasting**: Children under 5 years with a **weight-for-height** ratio 2 standard deviations lower than the WHO standard average.
+* **Severe Wasting**: Children under 5 years with a **weight-for-height** ratio 3 standard deviations lower than the WHO standard average.
+* **Underweight**: Children under 5 years with a **weight-for-age** ratio 2 standard deviations lower than the WHO standard average.
+* **Overweight**: Children under 5 years with a **weight-for-height** ratio 2 standard deviations higher than the WHO standard average.
+
+---
+
+## India: State-Level Picture
+
+The 22 states and UTs for which the reports were released are included in the plots.
+
+```{r fig.height=8, fig.width=12}
+u5_nutrition_indicators <- 81:85
+
+data <- data_states %>% 
+  filter(indicator_code %in% u5_nutrition_indicators)
+
+rank_df <- data %>% 
+  filter(indicator_code == 81) %>% 
+  mutate(
+    stunting_rank = dense_rank(`NFHS-5`),
+  ) %>% 
+  select(State, stunting_rank)
+
+data %>% 
+  inner_join(rank_df, by = "State") %>% 
+  mutate(
+    State = fct_reorder(State, stunting_rank),
+    "Direction of Change" = if_else(`NFHS-4` - `NFHS-5` < 0, "Increase", "Decrease")
+  ) %>% 
+  ggplot() +
+  geom_linerange(aes(y = State, xmin = `NFHS-5`, xmax = `NFHS-4`, 
+                     colour = `Direction of Change`), size = 1.5) +
+  scale_colour_manual(values = c("Decrease" = "#0072B2", "Increase" = "#D55E00")) + 
+  geom_point(aes(y = State, x = `NFHS-5`, shape = "NFHS 5"), size = 2) +
+  geom_point(aes(y = State, x = `NFHS-4`, shape = "NFHS 4"), size = 2) +
+  scale_shape_manual(name="NFHS Round", values=c("NFHS 5" = 19, "NFHS 4" = 1)) +
+  scale_x_continuous(labels = function(x) paste0(x, "%")) +
+  facet_wrap(~Indicator, ncol = 5, labeller = label_wrap_gen(), scale = "free_x") +
+  labs(x = "NFHS Indicator Value",
+       title = "Changes in NFHS Under-5 Nutrition Indicators: States") +
+  theme_bw() + 
+  theme(axis.text = element_text(colour="black", size = 10))
+```
+
+```{r fig.width=8, fig.height=8}
+library(ggrepel)
+
+data %>%
+  select(State, `NFHS-4`, `NFHS-5`, indicator_code) %>% 
+  pivot_longer(cols = c(`NFHS-4`, `NFHS-5`), names_to = 'Round') %>% 
+  pivot_wider(names_from = "indicator_code", values_from = "value") %>%
+  pivot_wider(names_from = Round, values_from = -c(State, Round)) %>% 
+  mutate(
+    change_81 = sign(`81_NFHS-5` - `81_NFHS-4`),
+    change_82 = sign(`82_NFHS-5` - `82_NFHS-4`),
+    change_type = case_when(
+      change_81 != -1 & change_82 != -1 ~ "Both Increased",
+      change_81 != -1 & change_82 == -1 ~ "Stunting Increased, Wasting Decreased",
+      change_81 == -1 & change_82 != -1 ~ "Stunting Decreased, Wasting Increased",
+      change_81 == -1 & change_82 == -1 ~ "Both Decreased",
+    )
+  ) %>% 
+  ggplot() +
+  geom_point(aes(x = `82_NFHS-4`, y = `81_NFHS-4`, group = State, shape = "NFHS-4"), 
+             colour = "#D55E00",
+             size = 2) +
+  geom_point(aes(x = `82_NFHS-5`, y = `81_NFHS-5`, group = State, shape = "NFHS-5"), 
+             colour = "#D55E00",
+             size = 2) +
+  geom_segment(aes(y = `81_NFHS-4`, yend = `81_NFHS-5`,
+                   x = `82_NFHS-4`, xend = `82_NFHS-5`),
+               arrow = arrow(length = unit(0.03, "npc")),
+               alpha = 0.3, size = 1) +
+  scale_shape_manual(values = c("NFHS-4" = 1, "NFHS-5" = 16), name = "NFHS Round") +
+  scale_y_continuous(labels = function(x) paste0(x, "%")) +
+  scale_x_continuous(labels = function(x) paste0(x, "%")) +
+  labs(y = "Stunting", x = "Wasting",
+       title = "Stunting and Wasting Changes Across the States",
+       caption = "A few cases where the indicators did not change are counted as increase in this plot") +
+  geom_text_repel(aes(y = `81_NFHS-5`, x = `82_NFHS-5`, label = State),
+                  size = 2.8) +
+  facet_wrap(~change_type) +
+  theme_bw()
+```
+
+---
+
+## India: Districts
+
+```{r fig.height=10, fig.width=12}
+library(gridExtra)
+
+u5_nutrition_indicators <- 73:77
+
+data_dist_nutri <- data_districts %>% 
+  filter(indicator_code %in% u5_nutrition_indicators)
+
+## top = 1 means top n and top = -1 means bottom n
+plot_ordered_bar <- function(data, indicator, indicator_name, top = 1, n = 40) {
+  order <- c("-1" = "Lowest", "1" = "Highest")
+  
+  data %>% 
+    filter(indicator_code == indicator) %>% 
+    mutate(
+      District = paste0(District, " (", `State-Code`, ")"),
+      District = fct_reorder(District, `NFHS-5`)
+    ) %>% 
+    top_n(top * n, District) %>% 
+    ggplot() +
+    geom_bar(aes(x = `NFHS-5`, y = District, fill = State), stat = 'identity') +
+    geom_point(aes(x = `NFHS-4`, y = District), shape = "|", size = 3) +
+    scale_x_continuous(labels = function(x) paste0(x, "%")) +
+    labs(x = "NFHS-5 Value (NFHS-4 Value Shown as '|')",
+         title = paste("Districts With the", order[as.character(top)], indicator_name)) +
+    theme_minimal() +
+    theme(text = element_text(size = 12))
+}
+
+plot_district_bars <- function(indicator, indicator_name) {
+  p1 <- plot_ordered_bar(data_dist_nutri, indicator, indicator_name, 1)
+  p2 <- plot_ordered_bar(data_dist_nutri, indicator, indicator_name, -1)
+  grid.arrange(p1, p2, ncol=2)
+}
+
+plot_district_bars(73, "Stunting %")
+```
+
+```{r fig.height=10, fig.width=12}
+plot_district_bars(74, "Wasting %")
+```
+
+
+```{r fig.height=10, fig.width=12}
+plot_district_bars(75, "Severe Wasting %")
+```
+
+```{r fig.height=10, fig.width=12}
+plot_district_bars(76, "Underweight %")
+```
+
+```{r fig.height=10, fig.width=12}
+plot_district_bars(77, "Overweight %")
+```
+
+---
+
+## Karnataka
+
+### Changes Over Time
+
+```{r fig.height=8, fig.width=10.2, dpi = 150}
+
+data_ka <- data_districts %>% 
+  filter(`State-Code` == 'KA') %>% 
+  filter(indicator_code %in% u5_nutrition_indicators)
+
+rank_df <- data_ka %>% 
+  filter(indicator_code == 73) %>% 
+  mutate(
+    stunting_rank = dense_rank(`NFHS-5`),
+  ) %>% 
+  select(District, stunting_rank)
+
+data_ka %>% 
+  inner_join(rank_df, by = "District") %>% 
+  #pivot_longer(cols = c(`NFHS-4`, `NFHS-5`), names_to = 'Round') %>% 
+  mutate(
+    District = fct_reorder(District, stunting_rank),
+    "Direction of Change" = if_else(`NFHS-4` - `NFHS-5` < 0, "Increase", "Decrease")
+  ) %>% 
+  ggplot() +
+  geom_linerange(aes(y = District, xmin = `NFHS-5`, xmax = `NFHS-4`, 
+                     colour = `Direction of Change`), size = 1.3) +
+  scale_colour_manual(values = c("Decrease" = "#0072B2", "Increase" = "#D55E00")) + 
+  geom_point(aes(y = District, x = `NFHS-5`, shape = "NFHS 5")) +
+  geom_point(aes(y = District, x = `NFHS-4`, shape = "NFHS 4")) +
+  scale_shape_manual(name="NFHS Round", values=c("NFHS 5" = 19, "NFHS 4" = 1)) +
+  scale_x_continuous(labels = function(x) paste0(x, "%")) +
+  facet_wrap(~Indicator, ncol = 5, labeller = label_wrap_gen(), scale = "free_x") +
+  labs(x = "NFHS Indicator Value",
+       title = "Changes in NFHS Under-5 Nutrition Indicators: Karnataka") +
+  theme_bw()
+```
+
+```{r fig.width=7, fig.height=6}
+library(ggrepel)
+
+data_ka %>%
+  select(District, `NFHS-4`, `NFHS-5`, indicator_code) %>% 
+  pivot_longer(cols = c(`NFHS-4`, `NFHS-5`), names_to = 'Round') %>% 
+  pivot_wider(names_from = "indicator_code", values_from = "value") %>%
+  pivot_wider(names_from = Round, values_from = -c(District, Round)) %>% 
+  mutate(
+    change_73 = sign(`73_NFHS-5` - `73_NFHS-4`),
+    change_74 = sign(`74_NFHS-5` - `74_NFHS-4`),
+    change_type = case_when(
+      change_73 == 1 & change_74 == 1 ~ "Both Increased",
+      change_73 == 1 & change_74 == -1 ~ "Stunting Increased, Wasting Decreased",
+      change_73 == -1 & change_74 == 1 ~ "Stunting Decreased, Wasting Increased",
+      change_73 == -1 & change_74 == -1 ~ "Both Decreased",
+    )
+  ) %>% 
+  ggplot() +
+  geom_point(aes(x = `74_NFHS-4`, y = `73_NFHS-4`, group = District, shape = "NFHS-4"), 
+             colour = "#D55E00",
+             size = 2) +
+  geom_point(aes(x = `74_NFHS-5`, y = `73_NFHS-5`, group = District, shape = "NFHS-5"), 
+             colour = "#D55E00",
+             size = 2) +
+  geom_segment(aes(y = `73_NFHS-4`, yend = `73_NFHS-5`,
+                   x = `74_NFHS-4`, xend = `74_NFHS-5`),
+               arrow = arrow(length = unit(0.03, "npc")),
+               alpha = 0.3, size = 1) +
+  scale_shape_manual(values = c("NFHS-4" = 1, "NFHS-5" = 16), name = "NFHS Round") +
+  scale_y_continuous(labels = function(x) paste0(x, "%")) +
+  scale_x_continuous(labels = function(x) paste0(x, "%")) +
+  labs(y = "Stunting", x = "Wasting",
+       title = "Stunting and Wasting Changes Across the Districts") +
+  geom_text_repel(aes(y = `73_NFHS-5`, x = `74_NFHS-5`, label = District),
+                  size = 2.8) +
+  facet_wrap(~change_type) +
+  theme_bw()
+```
+
+### Spatial Patterns
+
+```{r results='hide'}
+library(sf)
+
+ka_sf <- st_read('boundaries/datameet_districts/2011_Dist.shp') %>% 
+  filter(ST_NM == "Karnataka") %>% 
+  select(District = DISTRICT) %>% 
+  mutate(District = if_else(District == "Chamrajnagar", "Chamarajanagar", District))
+```
+
+```{r fig.width=7.5, fig.height=12}
+library(tmap)
+
+plot_maps <- function(data, indicator, indicator_name) {
+  data %>% 
+    filter(indicator_code == indicator) %>% 
+    tm_shape() +
+    tm_fill("value", title = "Percentage") +
+    tm_borders() +
+    tm_facets(c("Round")) +
+    tm_layout(indicator_name, between.margin = 0)
+}
+
+tmap_data <- ka_sf %>% 
+  inner_join(data_ka, by = "District") %>% 
+  select(District, `NFHS-4`, `NFHS-5`, indicator_code) %>% 
+  pivot_longer(cols = c(`NFHS-4`, `NFHS-5`), names_to = 'Round') %>%  
+  st_as_sf()
+
+p1 <- plot_maps(tmap_data, 73, "Stunting")
+p2 <- plot_maps(tmap_data, 74, "Wasting")
+p3 <- plot_maps(tmap_data, 75, "Severe Wasting")
+p4 <- plot_maps(tmap_data, 76, "Underweight")
+p5 <- plot_maps(tmap_data, 77, "Overweight")
+
+tmap_arrange(p1, p2, p3, p4, p5, ncol = 1)
+```
+
+### Observations
+
+We can see a few patterns:
+
+1. **Mandya, Chikmagalur, Chitradurga, Bangalore Rural, Tumkur, Dharwad, Gadag** - These districts had a significant increase in stunting compared to the last round. Most of these districts, however, had a drop in the wasting indicators.
+2. Wasting a severe wasting has improved in the majority of the districts in Karnataka. **Gadag, Dharwad, Tumkur, Raichur, Yadgir, Bijapur, Chitradurga, Mandya, Bangalore** - all of these had a large decline in wasting. 
+3. Quite surprisingly, a few districts that have a relatively low stunting level has shown major increases in wasting. This pattern can be seen clearly in the districts **Dakshina Kannada, Uttara Kannada, Kodagu, Shimoga and Chikmagalur**. As wasting is known to be caused by shorter term shocks compared to stunting, there is a possibility that some recent changes in the economic or public health situation affected the child nutrition situation across these southern states.
+
+---
+
+Licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
+
+---
