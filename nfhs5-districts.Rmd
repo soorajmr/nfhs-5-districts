@@ -327,6 +327,14 @@ We can see a few patterns:
 
 ---
 
-Licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
+# Code, Data and Credits {-}
+
+This work is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Copyright: Sooraj Raveendran, Divya Ravindranath, Viola Lewis, Divij Sinja, and Herry Gulabani. 2021  (Indian Institute for Human Settlements)
+
+* This report was prepared in R markdown. The source code and the data is available at https://github.com/soorajmr/nfhs-5-districts. This code is under MIT licence.
+
+* NFHS data extracted from the state and district fact sheets were downloaded from https://github.com/pratapvardhan/NFHS-5, by Pratap Vardhan and Bhanu K.
+
+* The spatial boundaries vector data were taken from https://github.com/datameet/maps, by [DataMeet India community](http://datameet.org/) ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)).
 
 ---
