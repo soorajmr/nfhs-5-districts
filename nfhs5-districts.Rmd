@@ -15,7 +15,7 @@ output:
 knitr::opts_chunk$set(echo = FALSE, message=FALSE, warning=FALSE, error = FALSE)
 ```
 
-For this analysis, we use data downloaded from https://github.com/pratapvardhan/NFHS-5, which in turn was compiled from the NFHS-5 state and district fact sheets.
+We use data from the NFHS-5 state and district fact sheets to do an exploratory data analysis. The data release was limited to 22 states and UTs. See the last section of this document for the data sources used.
 
 ```{r}
 library(tidyverse)
@@ -327,7 +327,14 @@ We can see a few patterns:
 
 ---
 
-# Code, Data and Credits {-}
+## Code, Data and Credits {.credits -}
+
+<style type="text/css">
+.credits {
+  font-size: 12px;
+  color: darkolivegreen;
+}
+</style>
 
 This work is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Copyright: Sooraj Raveendran, Divya Ravindranath, Viola Lewis, Divij Sinja, and Herry Gulabani. 2021  (Indian Institute for Human Settlements)
 
@@ -336,5 +343,7 @@ This work is licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/
 * NFHS data extracted from the state and district fact sheets were downloaded from https://github.com/pratapvardhan/NFHS-5, by Pratap Vardhan and Bhanu K.
 
 * The spatial boundaries vector data were taken from https://github.com/datameet/maps, by [DataMeet India community](http://datameet.org/) ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)).
+
+Report generated at: `r format(Sys.time(), '%d %B, %Y %I:%M %p')`
 
 ---
